@@ -1,0 +1,66 @@
+##version: "3.8"  # Docker Compose version
+
+services:
+  # Frontend (Nginx)
+  frontend:
+    image: nginx:latest
+    ports:
+      - "80:80"    # Map host port 80 to container port 80
+    volumes:
+      - ./frontend:/usr/share/nginx/html      # Serve static files from ./frontend
+      - ./frontend/nginx.conf:/etc/nginx/nginx.conf  # Custom Nginx config
+    networks:
+      - frontend-backend-net  # Connect to the same network as backend
+  
+  # Backend API (Node.js)
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DB_USER: ${DB_USER}    # Use environment variables
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+    ports:
+      - "3000:3000"  # Expose backend on port 3000
+    networks:
+      - frontend-backend-net
+    secrets:
+      - db_password   # Inject database password from Docker secret
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"  # CPU limit
+          memory: "500M" # Memory limit
+
+  # Database (PostgreSQL)
+  db:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: ${DB_USER}
+#      POSTGRES_PASSWORD_FILE: /run/secrets/db_password   # Get password from secret
+#     POSTGRES_PASSWORD_FILE: ./secrets/db_password.txt   # Get password from secret
+      POSTGRES_PASSWORD: ${DB_PASSWORD}  # Pass DB password via environment variable
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - db_data:/var/lib/postgresql/data  # Persistent volume for data
+    networks:
+      - backend-db-net  # Isolated network
+    secrets:
+      - db_password  # Use the Docker secret for password management
+
+# Define the networks
+networks:
+  frontend-backend-net:
+    driver: bridge
+  backend-db-net:
+    driver: bridge
+
+# Define Docker secrets
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+
+# Define persistent volumes
+volumes:
+  db_data:
+
